@@ -76,6 +76,14 @@ def print_network(net):
     print('Total number of parameters: %d' % num_params)
 
 
+def define_P():
+    device = torch.device("cuda")
+    with torch.no_grad():
+        loss_network = LossNetwork()
+        loss_network.to(device)
+    loss_network.eval()
+    return loss_network
+
 def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropout=False, init_type='normal', gpu_ids=[]):
     netG = None
     norm_layer = get_norm_layer(norm_type=norm)
@@ -120,6 +128,36 @@ def define_C(output_nc, ndf, init_type='normal', gpu_ids=[]):
 ##############################################################################
 # Classes
 ##############################################################################
+
+from collections import namedtuple
+import torchvision.models.vgg as vgg
+
+LossOutput = namedtuple(
+    "LossOutput", ["relu1", "relu2", "relu3", "relu4", "relu5"])
+
+class LossNetwork(nn.Module):
+    """Reference:
+        https://discuss.pytorch.org/t/how-to-extract-features-of-an-image-from-a-trained-model/119/3
+    """
+
+    def __init__(self):
+        super(LossNetwork, self).__init__()
+        self.vgg_layers = vgg.vgg19(pretrained=True).features
+        self.layer_name_mapping = {
+            '3': "relu1",
+            '8': "relu2",
+            '17': "relu3",
+            '26': "relu4",
+            '35': "relu5",
+        }
+
+    def forward(self, x):
+        output = {}
+        for name, module in self.vgg_layers._modules.items():
+            x = module(x)
+            if name in self.layer_name_mapping:
+                output[self.layer_name_mapping[name]] = x
+        return LossOutput(**output)
 
 
 # Defines the GAN loss which uses either LSGAN or the regular GAN.
@@ -417,17 +455,16 @@ class Classifier(nn.Module):
                 nn.LeakyReLU(0.2, True)
             ]
         self.before_linear = nn.Sequential(*sequence)
-        
+
         sequence = [
             nn.Linear(ndf * nf_mult, 1024),
             nn.Linear(1024, 10)
         ]
 
         self.after_linear = nn.Sequential(*sequence)
-    
+
     def forward(self, x):
         bs = x.size(0)
         out = self.after_linear(self.before_linear(x).view(bs, -1))
         return out
  #       return nn.functional.log_softmax(out, dim=1)
- 
