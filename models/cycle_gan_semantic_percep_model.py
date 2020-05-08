@@ -7,7 +7,7 @@ from torch.autograd import Variable
 import numpy as np
 
 
-class CycleGANSemanticModel(BaseModel):
+class CycleGANSemanticPercepModel(BaseModel):
     def name(self):
         return 'CycleGANModel'
 
@@ -17,7 +17,7 @@ class CycleGANSemanticModel(BaseModel):
         # specify the training losses you want to print out. The program will call base_model.get_current_losses
         self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A',
                 'D_B', 'G_B', 'cycle_B', 'idt_B',
-                'sem_AB', 'sem_BA', 'CLS']
+                'sem_AB', 'sem_BA', 'CLS', 'percep']
         # specify the images you want to save/display. The program will call base_model.get_current_visuals
         visual_names_A = ['real_A', 'fake_B', 'rec_A']
         visual_names_B = ['real_B', 'fake_A', 'rec_B']
@@ -63,6 +63,24 @@ class CycleGANSemanticModel(BaseModel):
             self.criterionCycle = torch.nn.L1Loss()
             self.criterionIdt = torch.nn.L1Loss()
             self.criterionCLS = torch.nn.modules.CrossEntropyLoss()
+            ############################################################################################
+            # pretrained vgg19 loss network
+            percep = opt.percep
+            layer_nums = ['3', '8', '17', '26', '35']
+            self.loss_output_nums = []
+            tmp_idx = 0
+
+            while percep:
+                if percep % 2 == 1:
+                    self.loss_output_nums.append(tmp_idx)
+                tmp_idx += 1
+                percep //= 2
+
+            self.criterionPercep = networks.define_P()
+            # mean square error
+            self.MSELoss = torch.nn.MSELoss()
+            ############################################################################################
+
             # initialize optimizers
             self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()),
                                                 lr=opt.lr, betas=(opt.beta1, 0.999))
@@ -94,15 +112,15 @@ class CycleGANSemanticModel(BaseModel):
         if self.isTrain:
            # Forward all four images through classifier
            # Keep predictions from fake images only
-           self.pred_real_A = self.netCLS(self.real_A)
+
+           self.pred_real_A = self.netCLS(self.real_A) # left f_s
            _,self.gt_pred_A = self.pred_real_A.max(1)
-           pred_real_B = self.netCLS(self.real_B)
+           pred_real_B = self.netCLS(self.real_B) # right f_T
            _,self.gt_pred_B = pred_real_B.max(1)
-           self.pred_fake_A = self.netCLS(self.fake_A)
-           self.pred_fake_B = self.netCLS(self.fake_B)
+           self.pred_fake_A = self.netCLS(self.fake_A) # right f_s
+           self.pred_fake_B = self.netCLS(self.fake_B) # left f_T
 
            _,pfB = self.pred_fake_B.max(1)
-
 
     def backward_D_basic(self, netD, real, fake):
         # Real
@@ -121,7 +139,8 @@ class CycleGANSemanticModel(BaseModel):
         label_A = self.input_A_label
         # forward only real source image through semantic classifier
         pred_A = self.netCLS(self.real_A)
-        self.loss_CLS = self.criterionCLS(pred_A, label_A)
+        # self.loss_CLS = self.criterionCLS(pred_A, label_A)
+        self.loss_CLS = self.criterionCLS(pred_A, label_A.long())
         self.loss_CLS.backward()
 
     def backward_D_A(self):
@@ -161,18 +180,32 @@ class CycleGANSemanticModel(BaseModel):
         self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B
 
         # semantic loss AB
-        self.loss_sem_AB = self.criterionCLS(self.pred_fake_B, self.input_A_label)
+        # self.loss_sem_AB = self.criterionCLS(self.pred_fake_B, self.input_A_label)
+        self.loss_sem_AB = self.criterionCLS(self.pred_fake_B, self.input_A_label.long())
         #self.loss_sem_AB = self.criterionCLS(self.pred_fake_B, self.gt_pred_A)
         # semantic loss BA
         self.loss_sem_BA = self.criterionCLS(self.pred_fake_A, self.gt_pred_B)
+
+        # perceptual loss AB
+        self.loss_percep_A = self.criterionPercep(self.real_A)
+        self.loss_percep_B = self.criterionPercep(self.fake_B)
+
+        self.loss_percep = self.MSELoss(
+            self.loss_percep_A[self.loss_output_nums[0]],
+            self.loss_percep_B[self.loss_output_nums[0]])
+
+        for idx in range(1, len(self.loss_output_nums)):
+            self.loss_percep += self.MSELoss(self.loss_percep_A[self.loss_output_nums[idx]],
+                                             self.loss_percep_B[self.loss_output_nums[idx]])
 
         # only use semantic loss when classifier has reasonably low loss
         #if True:
         if not hasattr(self, 'loss_CLS') or self.loss_CLS.detach().item() > 1.0:
             self.loss_sem_AB = 0 * self.loss_sem_AB
             self.loss_sem_BA = 0 * self.loss_sem_BA
+            self.loss_percep = 0 * self.loss_percep
 
-        self.loss_G += self.loss_sem_BA + self.loss_sem_AB
+        self.loss_G += self.loss_sem_AB + self.loss_sem_BA + self.loss_percep
         self.loss_G.backward()
 
     def optimize_parameters(self):

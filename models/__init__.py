@@ -18,6 +18,9 @@ def create_model(opt):
     elif opt.model == 'cycle_gan_semantic':
         from .cycle_gan_semantic_model import CycleGANSemanticModel
         model = CycleGANSemanticModel()
+    elif opt.model == 'cycle_gan_semantic_percep':
+        from .cycle_gan_semantic_percep_model import CycleGANSemanticPercepModel
+        model = CycleGANSemanticPercepModel()
     else:
         raise NotImplementedError('model [%s] not implemented.' % opt.model)
     model.initialize(opt)

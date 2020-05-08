@@ -31,7 +31,7 @@ class MnistSvhnDataset(BaseDataset):
         self.svhn = np.transpose(svhn_np, (3, 0, 1, 2))
         self.svhn_label = np.array(svhn_mat_train['y'])
 
-        
+
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5),
@@ -65,11 +65,11 @@ class MnistSvhnDataset(BaseDataset):
         A_path = '%01d_%05d.png' % (A_label, index)
 
         B_img = self.svhn[self.svhn_indices[index]]
-        B_label = self.svhn_label[self.svhn_indices[index % self.svhn.shape[0]]][0] % 10 # 10->0 
+        B_label = self.svhn_label[self.svhn_indices[index % self.svhn.shape[0]]][0] % 10 # 10->0
         B_img = self.transform(B_img)
         B_path = '%01d_%05d.png' % (B_label, index)
 
-            
+
         #A_img, B_img = B_img, A_img
         #A_path, B_path = B_path, A_path
         #A_label, B_label = B_label, A_label
@@ -79,18 +79,17 @@ class MnistSvhnDataset(BaseDataset):
                      'A_paths': A_path,
                      'A_label': A_label
                  })
-        
+
         item.update({'B': B_img,
                      'B_paths': B_path,
                      'B_label': B_label
                  })
         return item
-        
-    def __len__(self):
-        #if self.opt.which_direction == 'AtoB':
-        #    return len(self.mnist)
-        #else:            
-        #    return self.svhn.shape[0]
 
-        return self.svhn.shape[0] #min(len(self.mnist), self.svhn.shape[0])
-        
+    def __len__(self):
+        if self.opt.which_direction == 'AtoB':
+           return len(self.mnist)
+        else:
+           return self.svhn.shape[0]
+
+        # return self.svhn.shape[0] #min(len(self.mnist), self.svhn.shape[0])
