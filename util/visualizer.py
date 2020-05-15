@@ -27,10 +27,11 @@ def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
             im = imresize(im, (int(h / aspect_ratio), w), interp='bicubic')
         util.save_image(im, save_path)
 
-        ims.append(image_name)
-        txts.append(label)
-        links.append(image_name)
-    webpage.add_images(ims, txts, links, width=width)
+        # ims.append(image_name)
+        # txts.append(label)
+        # links.append(image_name)
+
+    # webpage.add_images(ims, txts, links, width=width)
 
 
 class Visualizer():

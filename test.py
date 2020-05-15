@@ -18,7 +18,7 @@ if __name__ == '__main__':
     model = create_model(opt)
     model.setup(opt)
     # create website
-    web_dir = os.path.join(opt.results_dir)
+    web_dir = os.path.join(opt.results_dir, 'mnist2svhn')
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.which_epoch))
     # test
     for i, data in enumerate(dataset):
